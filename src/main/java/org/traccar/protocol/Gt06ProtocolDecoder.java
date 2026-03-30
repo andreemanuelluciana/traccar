@@ -118,6 +118,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
     public static final int MSG_STATUS_3 = 0xA3;           // GL21L
     public static final int MSG_GPS_LBS_8 = 0x38;
     public static final int MSG_IBUTTON = 0x61;
+    public static final int MSG_X25 = 0x25;
 
     private enum Variant {
         VXT01,
@@ -188,6 +189,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_GPS_LBS_7:
             case MSG_GPS_LBS_RFID:
             case MSG_FENCE_MULTI:
+            case MSG_X25:
                 return true;
             case 0xA3: // MSG_FENCE_SINGLE / MSG_STATUS_3
                 return variant != Variant.SEEWORLD;
@@ -215,6 +217,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_FENCE_MULTI:
             case MSG_LBS_ALARM:
             case MSG_LBS_ADDRESS:
+            case MSG_X25:
                 return true;
             case 0xA3: // MSG_FENCE_SINGLE / MSG_STATUS_3
                 return variant != Variant.SEEWORLD;
@@ -235,6 +238,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_GPS_LBS_STATUS_5:
             case MSG_FENCE_MULTI:
             case MSG_LBS_ALARM:
+            case MSG_X25:
                 return true;
             case MSG_GPS_LBS_2:
                 return "NT20".equalsIgnoreCase(model);
@@ -454,6 +458,25 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case 0x2C -> Position.ALARM_ACCIDENT;
             case 0x30 -> modelVL ? Position.ALARM_BRAKING : Position.ALARM_JAMMING;
             default -> null;
+        };
+    }
+
+    private String parseX25DriverId(ByteBuf buf) {
+        int type = buf.readUnsignedByte();
+        int length = buf.readUnsignedByte();
+        return switch (type) {
+            case 0x00, 0x02 -> { // iButton or RFID decimal
+                long value = 0;
+                for (int i = 0; i < length; i++) {
+                    value = value * 256 + buf.readUnsignedByte();
+                }
+                yield String.valueOf(value);
+            }
+            case 0x01 -> ByteBufUtil.hexDump(buf.readSlice(length)); // RFID hex
+            default -> {
+                buf.skipBytes(length);
+                yield null;
+            }
         };
     }
 
@@ -1024,6 +1047,13 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             if (type == MSG_GPS_LBS_RFID) {
                 position.set(Position.KEY_DRIVER_UNIQUE_ID, ByteBufUtil.hexDump(buf.readSlice(8)));
                 buf.readUnsignedByte(); // validity
+            }
+
+            if (type == MSG_X25 && buf.readableBytes() > 6) { // 6 = index(2) + crc(2) + end(2)
+                String driverId = parseX25DriverId(buf);
+                if (driverId != null) {
+                    position.set(Position.KEY_DRIVER_UNIQUE_ID, driverId);
+                }
             }
 
             if (modelNT20 && type == MSG_GPS_LBS_2) {

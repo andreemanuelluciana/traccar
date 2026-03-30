@@ -597,6 +597,31 @@ public class Gt06ProtocolDecoderTest extends ProtocolTest {
         verifyPosition(decoder, binary(
                 "7878271208667030665022971a020c0a1e32c601727c1c0f89af002c14fa01366e000100010c003c1fdd0d0a"));
 
+        decoder.setModelOverride(null);
+
+        verifyNotNull(decoder, binary(
+                "7878242518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100640a00000100000d0a"));
+
+        verifyAttribute(decoder, binary(
+                "78782c2518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100640a000006010203040506000100000d0a"),
+                Position.KEY_DRIVER_UNIQUE_ID, "1108152157446");
+
+        verifyAttribute(decoder, binary(
+                "78782a2518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100640a000104abcdef12000100000d0a"),
+                Position.KEY_DRIVER_UNIQUE_ID, "abcdef12");
+
+        verifyAttribute(decoder, binary(
+                "78782a2518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100640a000204000186a0000100000d0a"),
+                Position.KEY_DRIVER_UNIQUE_ID, "100000");
+
+        verifyAttribute(decoder, binary(
+                "7878242518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100640a04000100000d0a"),
+                Position.KEY_ALARM, Position.ALARM_GEOFENCE_ENTER);
+
+        verifyAttribute(decoder, binary(
+                "7878242518061b0e0f05cf021d22430aa2660b0014000800ce01012c00000100500a00000100000d0a"),
+                Position.KEY_BATTERY_LEVEL, 80);
+
     }
 
 }
