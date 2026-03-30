@@ -72,6 +72,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
     public static final int MSG_LBS_MULTIPLE_1 = 0x28;
     public static final int MSG_LBS_MULTIPLE_2 = 0x2E;
     public static final int MSG_LBS_MULTIPLE_3 = 0x24;
+    public static final int MSG_X25 = 0x25;                 // GPS+LBS+Status+Driver ID
     public static final int MSG_LBS_WIFI = 0x2C;
     public static final int MSG_LBS_EXTEND = 0x18;
     public static final int MSG_LBS_STATUS = 0x19;
@@ -183,6 +184,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_GPS_LBS_STATUS_3:
             case MSG_GPS_LBS_STATUS_4:
             case MSG_GPS_LBS_STATUS_5:
+            case MSG_X25:
             case MSG_GPS_PHONE:
             case MSG_GPS_LBS_EXTEND:
             case MSG_GPS_LBS_7:
@@ -210,6 +212,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_GPS_LBS_STATUS_3:
             case MSG_GPS_LBS_STATUS_4:
             case MSG_GPS_LBS_STATUS_5:
+            case MSG_X25:
             case MSG_GPS_LBS_7:
             case MSG_GPS_LBS_RFID:
             case MSG_FENCE_MULTI:
@@ -233,6 +236,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case MSG_GPS_LBS_STATUS_3:
             case MSG_GPS_LBS_STATUS_4:
             case MSG_GPS_LBS_STATUS_5:
+            case MSG_X25:
             case MSG_FENCE_MULTI:
             case MSG_LBS_ALARM:
                 return true;
@@ -1043,6 +1047,14 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
 
             if (type == MSG_GPS_LBS_STATUS_3 || type == MSG_FENCE_MULTI) {
                 position.set(Position.KEY_GEOFENCE, buf.readUnsignedByte());
+            }
+
+            if (type == MSG_X25 && buf.readableBytes() > 6) {
+                int driverIdLength = buf.readUnsignedByte();
+                if (driverIdLength > 0 && buf.readableBytes() >= driverIdLength + 6) {
+                    position.set(Position.KEY_DRIVER_UNIQUE_ID,
+                            buf.readCharSequence(driverIdLength, StandardCharsets.US_ASCII).toString().trim());
+                }
             }
 
         } else if (type == MSG_ALARM) {
