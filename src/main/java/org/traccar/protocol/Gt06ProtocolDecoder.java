@@ -118,6 +118,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
     public static final int MSG_STATUS_3 = 0xA3;           // GL21L
     public static final int MSG_GPS_LBS_8 = 0x38;
     public static final int MSG_IBUTTON = 0x61;
+    public static final int MSG_X25 = 0x25;
 
     private enum Variant {
         VXT01,
@@ -453,6 +454,18 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case 0x29 -> modelSW ? Position.ALARM_ACCIDENT : Position.ALARM_ACCELERATION;
             case 0x2C -> Position.ALARM_ACCIDENT;
             case 0x30 -> modelVL ? Position.ALARM_BRAKING : Position.ALARM_JAMMING;
+            default -> null;
+        };
+    }
+
+    private String parseX25DriverId(int type, ByteBuf data) {
+        return switch (type) {
+            case 0x00 -> ByteBufUtil.hexDump(data); // iButton: 8-byte hex string
+            case 0x01 -> ByteBufUtil.hexDump(data); // RFID hex: 4-byte hex string
+            case 0x02 -> {
+                long value = data.readUnsignedInt(); // RFID decimal: 4-byte unsigned decimal
+                yield String.valueOf(value);
+            }
             default -> null;
         };
     }
@@ -815,6 +828,32 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
 
             long driverUniqueId = (buf.readUnsignedInt() << 16) | buf.readUnsignedShort();
             position.set(Position.KEY_DRIVER_UNIQUE_ID, String.valueOf(driverUniqueId));
+
+        } else if (type == MSG_X25) {
+
+            decodeGps(position, buf, false, deviceSession.get(DeviceSession.KEY_TIMEZONE));
+
+            decodeLbs(position, buf, type, true);
+
+            position.set("networkTechnology", buf.readUnsignedByte() > 0 ? "4G" : "2G");
+            position.set(Position.KEY_POWER, buf.readUnsignedShort() * 0.01);
+            position.set(Position.KEY_BATTERY, buf.readUnsignedShort() * 0.01);
+            position.set(Position.KEY_RSSI, buf.readUnsignedByte());
+            position.addAlarm(decodeAlarm(buf.readUnsignedByte(), false, false, false));
+            buf.readUnsignedByte(); // language
+            position.set(Position.KEY_ODOMETER, buf.readUnsignedInt());
+            position.set(Position.KEY_HOURS, buf.readUnsignedInt() * 1000L);
+
+            if (buf.readableBytes() > 6) { // 6 trailing bytes = index(2) + checksum(2) + footer(2)
+                int driverIdType = buf.readUnsignedByte();
+                int driverIdLength = driverIdType == 0x00 ? 8 : 4; // iButton=8 bytes, RFID=4 bytes
+                if (buf.readableBytes() >= driverIdLength + 6) {
+                    String driverId = parseX25DriverId(driverIdType, buf.readSlice(driverIdLength));
+                    if (driverId != null) {
+                        position.set(Position.KEY_DRIVER_UNIQUE_ID, driverId);
+                    }
+                }
+            }
 
         } else if (isSupported(type, model)) {
 
